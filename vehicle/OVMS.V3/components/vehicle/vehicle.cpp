@@ -59,7 +59,7 @@ OvmsVehicleFactory::OvmsVehicleFactory()
   m_currentvehicle = NULL;
   m_currentvehicletype.clear();
 
-  OvmsCommand* cmd_vehicle = MyCommandApp.RegisterCommand("vehicle","Vehicle framework");
+  OvmsCommand* cmd_vehicle = MyCommandApp.RegisterCommand("vehicle","Vehicle framework", vehicle_status, "", 0, 0, false);
   cmd_vehicle->RegisterCommand("module","Set (or clear) vehicle module",vehicle_module,"<type>",0,1,true,vehicle_validate);
   cmd_vehicle->RegisterCommand("list","Show list of available vehicle modules",vehicle_list);
   cmd_vehicle->RegisterCommand("status","Show vehicle module status",vehicle_status);
@@ -88,7 +88,7 @@ OvmsVehicleFactory::OvmsVehicleFactory()
   OvmsCommand* cmd_stat = MyCommandApp.RegisterCommand("stat","Show vehicle status",vehicle_stat);
   cmd_stat->RegisterCommand("trip","Show trip status",vehicle_stat_trip);
 
-  OvmsCommand* cmd_bms = MyCommandApp.RegisterCommand("bms","BMS framework");
+  OvmsCommand* cmd_bms = MyCommandApp.RegisterCommand("bms","BMS framework", bms_status, "", 0, 0, false);
   cmd_bms->RegisterCommand("status","Show BMS status",bms_status);
   cmd_bms->RegisterCommand("reset","Reset BMS statistics",bms_reset);
   cmd_bms->RegisterCommand("alerts","Show BMS alerts",bms_alerts);
@@ -141,7 +141,7 @@ OvmsVehicleFactory::OvmsVehicleFactory()
   dto->RegisterDuktapeFunction(DukOvmsVehicleStartCooldown, 0, "StartCooldown");
   dto->RegisterDuktapeFunction(DukOvmsVehicleStopCooldown, 0, "StopCooldown");
   dto->RegisterDuktapeFunction(DukOvmsVehicleObdRequest, 1, "ObdRequest");
-  MyScripts.RegisterDuktapeObject(dto);
+  MyDuktape.RegisterDuktapeObject(dto);
 #endif // #ifdef CONFIG_OVMS_SC_JAVASCRIPT_DUKTAPE
   }
 
@@ -187,6 +187,7 @@ void OvmsVehicleFactory::SetVehicle(const char* type)
     delete m_currentvehicle;
     m_currentvehicle = NULL;
     m_currentvehicletype.clear();
+    MyEvents.SignalEvent("vehicle.type.cleared", NULL);
     }
   m_currentvehicle = NewVehicle(type);
   if (m_currentvehicle)
@@ -591,7 +592,7 @@ void OvmsVehicle::VehicleTicker1(std::string event, void* data)
     {
     StandardMetrics.ms_v_charge_time->SetValue(0);
     }
-  
+
   if (StandardMetrics.ms_v_gen_inprogress->AsBool())
     {
     m_last_gentime = StandardMetrics.ms_v_gen_time->AsInt() + 1;
@@ -1677,7 +1678,7 @@ void OvmsVehicle::NotifyGridLog()
   {
   // Send grid (charge/generator) session log
   //  History type "*-LOG-Grid"
-  //  Notification type "data", subtype "log.grid" 
+  //  Notification type "data", subtype "log.grid"
 
   int storetime_days = MyConfig.GetParamValueInt("notify", "log.grid.storetime", 0);
   if (storetime_days <= 0)
@@ -1775,7 +1776,7 @@ void OvmsVehicle::NotifyTripLog()
   {
   // Send trip log
   //  History type "*-LOG-Trip"
-  //  Notification type "data", subtype "log.trip" 
+  //  Notification type "data", subtype "log.trip"
 
   int storetime_days = MyConfig.GetParamValueInt("notify", "log.trip.storetime", 0);
   if (storetime_days <= 0)

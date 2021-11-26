@@ -99,9 +99,12 @@ static void GsmPPPOS_StatusCallback(ppp_pcb *pcb, int err_code, void *ctx)
       }
     case PPPERR_USER:
       {
-      ESP_LOGI(TAG, "PPP connection has been closed");
-      me->m_connected = false;
-      MyEvents.SignalEvent("system.modem.down",NULL);
+      if (me->m_connected)
+        {
+        ESP_LOGI(TAG, "PPP connection has been closed");
+        me->m_connected = false;
+        MyEvents.SignalEvent("system.modem.down",NULL);
+        }
       return;
       }
     case PPPERR_CONNECT:
@@ -147,10 +150,13 @@ static void GsmPPPOS_StatusCallback(ppp_pcb *pcb, int err_code, void *ctx)
     }
 
   ESP_LOGI(TAG, "Shutdown (via status callback)");
-  me->m_connected = false;
-  MyEvents.SignalEvent("system.modem.down",NULL);
+  if (me->m_connected)
+    {
+    me->m_connected = false;
+    MyEvents.SignalEvent("system.modem.down",NULL);
+    }
 
-  // Try to reconnect in 30 seconds. This is assuming the SIMCOM modem level
+  // Try to reconnect in 30 seconds. This is assuming the modem level
   // data channel is still open.
   ESP_LOGI(TAG, "Attempting PPP reconnecting in 30 seconds...");
   // Note: We are in tiT task context here so use ppp_connect not pppapi_connect.
@@ -168,6 +174,7 @@ GsmPPPOS::GsmPPPOS(GsmMux* mux, int channel)
 
 GsmPPPOS::~GsmPPPOS()
   {
+  Shutdown(true);
   if (m_ppp)
     {
     pppapi_free(m_ppp);
@@ -181,9 +188,12 @@ void GsmPPPOS::IncomingData(uint8_t *data, size_t len)
   pppos_input_tcpip(m_ppp, (u8_t*)data, (int)len);
   }
 
-void GsmPPPOS::Initialise()
+void GsmPPPOS::Initialise(GsmMux* mux, int channel)
   {
   ESP_LOGI(TAG, "Initialising...");
+
+  m_mux = mux;
+  m_channel = channel;
 
   if (m_ppp == NULL)
     {
@@ -198,7 +208,7 @@ void GsmPPPOS::Initialise()
   pppapi_set_default(m_ppp);
   }
 
-void GsmPPPOS::Connect()
+void GsmPPPOS::Startup()
   {
   if (m_ppp == NULL) return;
 

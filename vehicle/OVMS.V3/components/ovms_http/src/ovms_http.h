@@ -28,43 +28,37 @@
 ; THE SOFTWARE.
 */
 
-#ifndef __GSM_PPPOS_H__
-#define __GSM_PPPOS_H__
+#ifndef __OVMS_HTTP_H__
+#define __OVMS_HTTP_H__
 
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/queue.h"
-#include "driver/uart.h"
-#include "tcpip_adapter.h"
-extern "C"
-  {
-#include "netif/ppp/pppos.h"
-#include "netif/ppp/ppp.h"
-#include "netif/ppp/pppapi.h"
-  };
-#include "gsmmux.h"
-#include "ovms.h"
+#include <string>
+#include "ovms_net.h"
+#include "ovms_buffer.h"
 
-class GsmPPPOS : public InternalRamAllocated
+class OvmsHttpClient : public OvmsNetTcpConnection
   {
   public:
-    GsmPPPOS(GsmMux* mux, int channel);
-    ~GsmPPPOS();
+    OvmsHttpClient();
+    OvmsHttpClient(std::string url, const char* method = "GET");
+    virtual ~OvmsHttpClient();
 
   public:
-    void IncomingData(uint8_t *data, size_t len);
-    void Initialise();
-    void Connect();
-    void Shutdown(bool hard=false);
-    const char* ErrCodeName(int errcode);
+    virtual void Disconnect();
 
   public:
-    GsmMux*      m_mux;
-    int          m_channel;
-    ppp_pcb*     m_ppp;
-    struct netif m_ppp_netif;
-    bool         m_connected;
-    int          m_lasterrcode;
+    bool Request(std::string url, const char* method = "GET");
+    size_t BodyRead(void *buf, size_t nbyte);
+    int BodyHasLine();
+    std::string BodyReadLine();
+    size_t BodySize();
+    int ResponseCode();
+    std::string GetBodyAsString();
+    void Reset();
+
+  protected:
+    OvmsBuffer* m_buf;
+    size_t m_bodysize;
+    int m_responsecode;
   };
 
-#endif //#ifndef __GSM_PPPOS__
+#endif //#ifndef __OVMS_HTTP_H__

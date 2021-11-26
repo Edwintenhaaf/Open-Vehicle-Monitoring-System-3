@@ -28,35 +28,33 @@
 ; THE SOFTWARE.
 */
 
-#ifndef __OVMS_HTTP_H__
-#define __OVMS_HTTP_H__
+#ifndef __SIMCOM_7000_H__
+#define __SIMCOM_7000_H__
 
-#include <string>
-#include "ovms_net.h"
-#include "ovms_buffer.h"
+#include "ovms_cellular.h"
 
-class OvmsHttpClient : public OvmsNetTcpConnection
+class simcom7000 : public modemdriver
   {
   public:
-    OvmsHttpClient();
-    OvmsHttpClient(std::string url, const char* method = "GET");
-    virtual ~OvmsHttpClient();
+    simcom7000();
+    ~simcom7000();
 
   public:
-    virtual void Disconnect();
+    const char* GetModel();
+    const char* GetName();
 
-  public:
-    bool Request(std::string url, const char* method = "GET");
-    size_t BodyRead(void *buf, size_t nbyte);
-    int BodyHasLine();
-    std::string BodyReadLine();
-    size_t BodySize();
-    int ResponseCode();
+    int GetMuxChannels()    { return 4; }
+    int GetMuxChannelCTRL() { return 0; }
+    int GetMuxChannelNMEA() { return 1; }
+    int GetMuxChannelDATA() { return 2; }
+    int GetMuxChannelPOLL() { return 3; }
+    int GetMuxChannelCMD()  { return 4; }
 
-  protected:
-    OvmsBuffer* m_buf;
-    size_t m_bodysize;
-    int m_responsecode;
+    void PowerCycle();
+    bool State1Leave(modem::modem_state1_t oldstate);
+    bool State1Enter(modem::modem_state1_t newstate);
+    modem::modem_state1_t State1Activity(modem::modem_state1_t curstate);
+    modem::modem_state1_t State1Ticker1(modem::modem_state1_t curstate);
   };
 
-#endif //#ifndef __OVMS_HTTP_H__
+#endif //#ifndef __SIMCOM_7000_H__

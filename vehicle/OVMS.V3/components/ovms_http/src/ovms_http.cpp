@@ -67,6 +67,10 @@ bool OvmsHttpClient::Request(std::string url, const char* method)
     {
     url = url.substr(7);
     }
+  else if (url.compare(0, 8, "https://", 8) == 0)
+      {
+      url = url.substr(8);
+      }
   std::string server;
   std::string path;
   std::string service;
@@ -229,4 +233,48 @@ size_t OvmsHttpClient::BodySize()
 int OvmsHttpClient::ResponseCode()
   {
   return m_responsecode;
+  }
+
+std::string OvmsHttpClient::GetBodyAsString()
+  {
+  std::string body;
+
+  if (!IsOpen())
+    {
+    ESP_LOGE(TAG, "http request failed");
+    return body;
+    }
+
+  size_t expected = BodySize();
+  body.reserve(expected);
+
+  uint8_t rbuf[512];
+  size_t filesize = 0;
+  while (int k = BodyRead(rbuf,512))
+    {
+    filesize += k;
+    body.append((const char*)rbuf,k);
+    }
+  Disconnect();
+
+  if (filesize != expected)
+    {
+    ESP_LOGE(TAG, "Download file size (%d) does not match expected (%d)", filesize, expected);
+    body.empty();
+    }
+
+  Disconnect();
+
+  return body;
+  }
+
+void OvmsHttpClient::Reset()
+  {
+  if (m_buf)
+    {
+    delete m_buf;
+    m_buf = NULL;
+    }
+  m_bodysize = 0;
+  m_responsecode = 0;
   }

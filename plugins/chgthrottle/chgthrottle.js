@@ -1,18 +1,18 @@
 /**
  * /store/scripts/lib/chgthrottle.js
- * 
+ *
  * Module plugin:
  *  Throttle charge current and/or stop charge if charger gets too hot.
- * 
+ *
  * Version 1.2   Michael Balzer <dexter@dexters-web.de>
  *  - notify initially, then on level-up during charge, else on level-down
- * 
+ *
  * Enable:
  *  - install at above path
  *  - add to /store/scripts/ovmsmain.js:
  *        chgthrottle = require("lib/chgthrottle");
  *  - script reload
- * 
+ *
  * Config:
  *  - usr chgthrottle.enabled         …yes = enable throttling
  *  - usr chgthrottle.t1.temp         …temperature threshold 1
@@ -21,13 +21,13 @@
  *  - usr chgthrottle.t2.amps         …current 2
  *  - usr chgthrottle.t3.temp         …threshold 3
  *  - usr chgthrottle.t3.amps         …current 3
- * 
+ *
  * Set t1…3 to ascending temperature thresholds.
  * Set amps to -1 to stop charge at that level.
- * 
+ *
  * Usage:
  *  - script eval chgthrottle.info()  …show config & state (JSON)
- * 
+ *
  */
 
 const tickerEvent = "ticker.60";
