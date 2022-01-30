@@ -1366,36 +1366,51 @@ void OvmsServerV2::TransmitMsgTPMS(bool always)
 
 void OvmsServerV2::TransmitMsgFirmware(bool always)
   {
+  // As the signal quality is the only fast changing metric here, and will normally
+  // change continuously +/- 2 even while parking, we check this for an actual value
+  // difference > 2 to the last transmission, so we don't need to retransmit the
+  // -now- comparably huge static info contained here on every signal level change.
+  // TODO: move dynamic network status infos into another message (needs App updates)
+  static int last_m_net_sq = 0;
+  int curr_m_net_sq = StandardMetrics.ms_m_net_sq->AsInt(0, sq);
+
   m_now_firmware = false;
 
   bool modified =
     StandardMetrics.ms_m_version->IsModifiedAndClear(MyOvmsServerV2Modifier) |
     StandardMetrics.ms_v_vin->IsModifiedAndClear(MyOvmsServerV2Modifier) |
-    StandardMetrics.ms_m_net_sq->IsModifiedAndClear(MyOvmsServerV2Modifier) |
+    (std::abs(curr_m_net_sq - last_m_net_sq) > 2) |
     StandardMetrics.ms_v_type->IsModifiedAndClear(MyOvmsServerV2Modifier) |
     StandardMetrics.ms_m_net_provider->IsModifiedAndClear(MyOvmsServerV2Modifier) |
     StandardMetrics.ms_v_env_service_range->IsModifiedAndClear(MyOvmsServerV2Modifier) |
-    StandardMetrics.ms_v_env_service_time->IsModifiedAndClear(MyOvmsServerV2Modifier);
+    StandardMetrics.ms_v_env_service_time->IsModifiedAndClear(MyOvmsServerV2Modifier) |
+    StandardMetrics.ms_m_hardware->IsModifiedAndClear(MyOvmsServerV2Modifier);
 
   // Quick exit if nothing modified
   if ((!always)&&(!modified)) return;
 
+  last_m_net_sq = curr_m_net_sq;
+
   extram::ostringstream buffer;
   buffer
     << "MP-0 F"
-    << StandardMetrics.ms_m_version->AsString("")
+    << mp_encode(StandardMetrics.ms_m_version->AsString(""))
     << ","
-    << StandardMetrics.ms_v_vin->AsString("")
+    << mp_encode(StandardMetrics.ms_v_vin->AsString(""))
     << ","
     << StandardMetrics.ms_m_net_sq->AsString("0",sq)
-    << ",1,"
+    << ","
+    << MyConfig.GetParamValue("vehicle", "canwrite", "0")
+    << ","
     << StandardMetrics.ms_v_type->AsString("")
     << ","
-    << StandardMetrics.ms_m_net_provider->AsString("")
+    << mp_encode(StandardMetrics.ms_m_net_provider->AsString(""))
     << ","
     << StandardMetrics.ms_v_env_service_range->AsString("-1", Kilometers, 0)
     << ","
     << StandardMetrics.ms_v_env_service_time->AsString("-1", Seconds, 0)
+    << ","
+    << mp_encode(StandardMetrics.ms_m_hardware->AsString(""))
     ;
 
   Transmit(buffer.str().c_str());
@@ -1724,6 +1739,14 @@ void OvmsServerV2::MetricModified(OvmsMetric* metric)
   if (StandardMetrics.ms_s_v2_peers->AsInt() == 0)
     return;
 
+  if ((metric == StandardMetrics.ms_v_vin)||
+      (metric == StandardMetrics.ms_v_type)||
+      (metric == StandardMetrics.ms_m_net_provider)||
+      (metric == StandardMetrics.ms_m_hardware))
+    {
+    m_now_firmware = true;
+    }
+
   if ((metric == StandardMetrics.ms_v_charge_climit)||
       (metric == StandardMetrics.ms_v_charge_limit_range)||
       (metric == StandardMetrics.ms_v_charge_limit_soc)||
@@ -2005,6 +2028,25 @@ void OvmsServerV2::Ticker1(std::string event, void* data)
     }
   }
 
+void OvmsServerV2::RequestUpdate(bool txall)
+  {
+  if (txall)
+    {
+    m_lasttx = 0;
+    }
+  else
+    {
+    m_now_stat = true;
+    m_now_gen = true;
+    m_now_gps = true;
+    m_now_tpms = true;
+    m_now_firmware = true;
+    m_now_environment = true;
+    m_now_capabilities = true;
+    m_now_group = true;
+    }
+  }
+
 OvmsServerV2::OvmsServerV2(const char* name)
   : OvmsServer(name)
   {
@@ -2174,6 +2216,21 @@ void ovmsv2_status(int verbosity, OvmsWriter* writer, OvmsCommand* cmd, int argc
     }
   }
 
+void ovmsv2_update(int verbosity, OvmsWriter* writer, OvmsCommand* cmd, int argc, const char* const* argv)
+  {
+  if (MyOvmsServerV2 == NULL)
+    {
+    writer->puts("ERROR: OVMS v2 server has not been started");
+    }
+  else
+    {
+    bool txall = (strcmp(cmd->GetName(), "all") == 0);
+    MyOvmsServerV2->RequestUpdate(txall);
+    writer->printf("Server V2 data update for %s metrics has been scheduled\n",
+      txall ? "all" : "modified");
+    }
+  }
+
 OvmsServerV2Init MyOvmsServerV2Init  __attribute__ ((init_priority (6100)));
 
 OvmsServerV2Init::OvmsServerV2Init()
@@ -2185,6 +2242,10 @@ OvmsServerV2Init::OvmsServerV2Init()
   cmd_v2->RegisterCommand("start","Start an OVMS V2 Server Connection",ovmsv2_start);
   cmd_v2->RegisterCommand("stop","Stop an OVMS V2 Server Connection",ovmsv2_stop);
   cmd_v2->RegisterCommand("status","Show OVMS V2 Server connection status",ovmsv2_status);
+
+  OvmsCommand* cmd_update = cmd_v2->RegisterCommand("update", "Request OVMS V2 Server data update", ovmsv2_update);
+  cmd_update->RegisterCommand("all", "Transmit all metrics covered by v2 protocol", ovmsv2_update);
+  cmd_update->RegisterCommand("modified", "Transmit modified metrics only", ovmsv2_update);
 
   MyConfig.RegisterParam("server.v2", "V2 Server Configuration", true, true);
   // Our instances:

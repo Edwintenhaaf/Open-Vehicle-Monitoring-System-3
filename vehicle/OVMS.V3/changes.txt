@@ -1,6 +1,38 @@
 Open Vehicle Monitor System v3 - Change log
 
 ????-??-?? ???  ???????  OTA release
+- Maxus eDeliver3: Add CCS Charging
+	rewrite polling system
+- Volt/Ampera:: added notification for "fuel" metric.
+    new config: [xva] notify_va_metrics 	(bool, default no)
+- Server V2/V3: added manual update request
+    Note: the servers normally don't need a manual trigger to perform
+    data updates, they listen to metrics changes and events. Use this
+    only if you need extraordinary single updates as fast as possible.
+  New commands:
+    server v2 update [all|modified]     -- Request V2 data update
+    server v3 update [all|modified]     -- Request V3 data update
+- Notifications: add tracing (debug logging) of stream notifications
+  New commands:
+    notify trace all                    -- Enable logging of stream notifications
+- Nissan LEAF:
+ - Remote heating/cooling now works on 2011-2012 LEAFs
+ - Stop charge feature added, works via app
+ - Charge to Limit SOC and/or range added with a top-up feature.
+ - Improved charging metric logic.
+ - Fixed incorrect HVAC (Climate Control) status when charging (for 2013+).
+ - 9 new metrics added
+    xnl.v.b.max.gids (Max number of GIDs the battery can reach (for 2016+))
+    xnl.v.b.heatrequested (Battery is requesting heater elements to turn on (for 2013+))
+    xnl.v.b.heatergranted (Vehicle is OKing heater elements to turn on (for 2013+))
+    xnl.v.c.chargeminutes3kW (The 3kW charge time estimate the car calculates)
+    xnl.v.c.chargebars (Remaining charge "bars" on dashboard)
+    xnl.v.c.event.notification (Used to not send duplicate notifications for charge to limit feature.)
+    xnl.v.c.event.reason (When charge to limit feature starts the charge shows if was triggered due to range or SOC limit.)
+    xnl.v.c.state.previous (Used to better handle charging substate, shows previos charging state timed to ticker.10.)
+    xnl.cc.rqinprogress (Indicates the period betwen arrival of climate control action message and climate control activation.)
+ - Wakeup command now charges 12V battery if connected to EVSE
+ - 2011-2012 LEAF now reads AC voltage from grid
 
 2021-11-22 MWJ  3.2.018  OTA release
 - Vehicle: added optional automatic trip report generation

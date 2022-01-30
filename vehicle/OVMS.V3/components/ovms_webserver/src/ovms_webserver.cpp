@@ -109,7 +109,9 @@ OvmsWebServer::OvmsWebServer()
   RegisterPage("/status", "Status", HandleStatus, PageMenu_Main, PageAuth_Cookie);
   RegisterPage("/shell", "Shell", HandleShell, PageMenu_Tools, PageAuth_Cookie);
   RegisterPage("/edit", "Editor", HandleEditor, PageMenu_Tools, PageAuth_Cookie);
+#ifdef WEBSRV_HAVE_SETUPWIZARD
   RegisterPage("/cfg/init", "Setup wizard", HandleCfgInit, PageMenu_None, PageAuth_Cookie);
+#endif
   RegisterPage("/cfg/password", "Password", HandleCfgPassword, PageMenu_Config, PageAuth_Cookie);
   RegisterPage("/cfg/vehicle", "Vehicle", HandleCfgVehicle, PageMenu_Config, PageAuth_Cookie);
   RegisterPage("/cfg/wifi", "Wifi", HandleCfgWifi, PageMenu_Config, PageAuth_Cookie);
@@ -172,6 +174,7 @@ void OvmsWebServer::NetManInit(std::string event, void* data)
     mg_set_timer(nc, mg_time() + SESSION_CHECK_INTERVAL);
   }
 
+#ifdef CONFIG_MG_ENABLE_SSL
   // bind https:
   if (path_exists("/store/tls/webserver.crt") && path_exists("/store/tls/webserver.key")) {
     ESP_LOGI(TAG, "Binding to port 443 (https)");
@@ -184,6 +187,7 @@ void OvmsWebServer::NetManInit(std::string event, void* data)
       mg_set_protocol_http_websocket(nc);
     }
   }
+#endif // CONFIG_MG_ENABLE_SSL
 }
 
 void OvmsWebServer::NetManStop(std::string event, void* data)
@@ -204,9 +208,11 @@ void OvmsWebServer::ConfigChanged(std::string event, void* data)
   OvmsConfigParam* param = (OvmsConfigParam*) data;
   ESP_LOGD(TAG, "ConfigChanged: %s %s", event.c_str(), param ? param->GetName().c_str() : "");
 
+#ifdef WEBSRV_HAVE_SETUPWIZARD
   if (event == "config.mounted") {
     CfgInitStartup();
   }
+#endif
 
 #if MG_ENABLE_FILESYSTEM
   if (!param || param->GetName() == "http.server") {

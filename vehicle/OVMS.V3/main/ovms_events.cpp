@@ -40,7 +40,10 @@ static const char *TAG = "events";
 #include "ovms_command.h"
 #include "ovms_script.h"
 #include "ovms_boot.h"
+
+#ifdef CONFIG_OVMS_COMP_OTA
 #include "ovms_ota.h"
+#endif
 
 OvmsEvents MyEvents __attribute__ ((init_priority (1200)));
 
@@ -251,10 +254,12 @@ void OvmsEvents::EventTask()
       }
     else
       {
+#ifdef CONFIG_OVMS_COMP_OTA
       // Timeout on xQueueReceive: ignore during OTA flash job:
       OvmsMutexLock m_lock(&MyOTA.m_flashing, 0);
       if (!m_lock.IsLocked())
         continue;
+#endif
       // …no OTA flashing in progress => abort:
       ESP_LOGE(TAG, "EventTask: [QueueTimeout] timer service / ticker timer has died => aborting");
       m_current_event = "[QueueTimeout]";
@@ -394,8 +399,10 @@ static void CheckQueueOverflow(const char* from, char* event)
     {
     // We've dropped a potentially important event, system is instable now.
     // As the event queue is full, a normal reboot is no option, so…
+#ifdef CONFIG_OVMS_COMP_OTA
     // …wait for a running OTA job to finish…
     OvmsMutexLock m_lock(&MyOTA.m_flashing);
+#endif
     // …then abort:
     ESP_LOGE(TAG, "%s: lost important event => aborting", from);
     MyCommandApp.CloseLogfile();
@@ -406,14 +413,27 @@ static void CheckQueueOverflow(const char* from, char* event)
 
 void OvmsEvents::SignalScheduledEvent(TimerHandle_t timer)
   {
+  OvmsMutexLock lock(&MyEvents.m_timers_mutex);
+
+  // retrieve timer payload message (event):
   event_queue_t* msg = (event_queue_t*) pvTimerGetTimerID(timer);
+  vTimerSetTimerID(timer, NULL);
+  if (!msg)
+    {
+    // This should no longer happen, but keeping the test doesn't hurt.
+    // See: https://github.com/espressif/esp-idf/issues/8234
+    ESP_LOGW(TAG, "SignalScheduledEvent: duplicate callback invocation detected");
+    return;
+    }
+
+  // … and pass on to event task:
   if (xQueueSend(MyEvents.m_taskqueue, msg, 0) != pdTRUE)
     {
     CheckQueueOverflow("SignalScheduledEvent", msg->body.signal.event);
     MyEvents.FreeQueueSignalEvent(msg);
     }
+
   delete msg;
-  OvmsMutexLock lock(&MyEvents.m_timers_mutex);
   MyEvents.m_timer_active[timer] = false;
   }
 
@@ -430,6 +450,7 @@ bool OvmsEvents::ScheduleEvent(event_queue_t* msg, uint32_t delay_ms)
     ESP_LOGE(TAG, "ScheduleEvent: message duplication failed, event dropped");
     return false;
     }
+
   // find available timer:
   for (it = m_timers.begin(); it != m_timers.end(); it++)
     {
@@ -445,9 +466,9 @@ bool OvmsEvents::ScheduleEvent(event_queue_t* msg, uint32_t delay_ms)
     }
   if (it == m_timers.end())
     {
-    // create new timer:
+    // create & register a new timer:
     ESP_LOGI(TAG, "ScheduleEvent: creating new timer");
-    timer = xTimerCreate("ScheduleEvent", timerticks, pdFALSE, msgdup, SignalScheduledEvent);
+    timer = xTimerCreate("ScheduleEvent", timerticks, pdFALSE, NULL, SignalScheduledEvent);
     if (!timer)
       {
       ESP_LOGE(TAG, "ScheduleEvent: xTimerCreate failed, event dropped");
@@ -455,25 +476,19 @@ bool OvmsEvents::ScheduleEvent(event_queue_t* msg, uint32_t delay_ms)
       return false;
       }
     m_timers.push_back(timer);
+    m_timer_active[timer] = false;
     }
-  else
+
+  // set payload, update & start the timer:
+  vTimerSetTimerID(timer, msgdup);
+  if (xTimerChangePeriod(timer, timerticks, 0) != pdPASS) // also starts the timer
     {
-    // update timer:
-    if (xTimerChangePeriod(timer, timerticks, 0) != pdPASS)
-      {
-      ESP_LOGE(TAG, "ScheduleEvent: xTimerChangePeriod failed, event dropped");
-      delete msgdup;
-      return false;
-      }
-    vTimerSetTimerID(timer, msgdup);
-    }
-  // start timer:
-  if (xTimerStart(timer, 0) != pdPASS)
-    {
-    ESP_LOGE(TAG, "ScheduleEvent: xTimerStart failed, event dropped");
+    ESP_LOGE(TAG, "ScheduleEvent: xTimerChangePeriod failed, event dropped");
+    vTimerSetTimerID(timer, NULL);
     delete msgdup;
     return false;
     }
+
   m_timer_active[timer] = true;
   return true;
   }
